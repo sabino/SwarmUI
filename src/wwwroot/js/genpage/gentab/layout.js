@@ -265,9 +265,6 @@ class GenTabLayout {
             this.inputSidebar.style.height = `calc(100vh - ${fixed})`;
             this.mainImageArea.style.height = `calc(100vh - ${fixed})`;
             this.currentImageWrapbox.style.height = `calc(100vh - ${fixed} - ${altHeight})`;
-            if (imageEditor) {
-                imageEditor.inputDiv.style.height = `calc(100vh - ${fixed} - ${altHeight})`;
-            }
             this.editorSizebar.style.height = `calc(100vh - ${fixed} - ${altHeight})`;
             this.currentImageBatch.style.height = `calc(100vh - ${fixed})`;
             this.topSection.style.height = `calc(100vh - ${fixed})`;
@@ -279,9 +276,6 @@ class GenTabLayout {
             this.inputSidebar.style.height = '';
             this.mainImageArea.style.height = '';
             this.currentImageWrapbox.style.height = `calc(49vh - ${altHeight} + 1rem)`;
-            if (imageEditor) {
-                imageEditor.inputDiv.style.height = `calc(49vh - ${altHeight})`;
-            }
             this.editorSizebar.style.height = `calc(49vh - ${altHeight})`;
             this.currentImageBatch.style.height = '';
             this.topSection.style.height = '';
@@ -516,7 +510,7 @@ class GenTabLayout {
             });
         }
         this.altText.addEventListener('keydown', (e) => {
-            if (e.key == 'Enter' && !e.shiftKey && getUserSetting('enterkeygenerates', 'true')) {
+            if (e.key == 'Enter' && !e.shiftKey && internalSiteJsGetUserSetting('enterkeygenerates', 'true')) {
                 this.altText.dispatchEvent(new Event('change'));
                 getRequiredElementById('alt_generate_button').click();
                 e.preventDefault();
@@ -525,7 +519,7 @@ class GenTabLayout {
             }
         });
         this.altNegText.addEventListener('keydown', (e) => {
-            if (e.key == 'Enter' && !e.shiftKey && getUserSetting('enterkeygenerates', 'true')) {
+            if (e.key == 'Enter' && !e.shiftKey && internalSiteJsGetUserSetting('enterkeygenerates', 'true')) {
                 this.altNegText.dispatchEvent(new Event('change'));
                 getRequiredElementById('alt_generate_button').click();
                 e.preventDefault();

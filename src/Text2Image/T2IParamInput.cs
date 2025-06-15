@@ -137,6 +137,9 @@ public class T2IParamInput
     /// <summary>If true, special early load has already ran.</summary>
     public bool EarlyLoadDone = false;
 
+    /// <summary>Unique user request ID for this gen request, from <see cref="User.GetNextRequestId"/>. 0 if no session/user available.</summary>
+    public long UserRequestId = 0;
+
     /// <summary>Arbitrary incrementer for sub-minute unique IDs.</summary>
     public static int UIDIncrementer = 0;
 
@@ -150,6 +153,7 @@ public class T2IParamInput
     public T2IParamInput(Session session)
     {
         SourceSession = session;
+        UserRequestId = session?.User?.GetNextRequestId() ?? 0;
         InternalSet.SourceSession = session;
         InterruptToken = session is null ? new CancellationTokenSource().Token : session.SessInterrupt.Token;
         ExtraMeta["date"] = $"{RequestTime:yyyy-MM-dd}";
@@ -403,6 +407,10 @@ public class T2IParamInput
     /// <summary>Formats embeddings in a prompt string and returns the cleaned string.</summary>
     public static string FillEmbedsInString(string str, Func<string, string> format)
     {
+        while (str.Contains("\0swarmembed\\"))
+        {
+            str = str.Replace("\0swarmembed\\", "\0swarmembed");
+        }
         return StringConversionHelper.QuickSimpleTagFiller(str, "\0swarmembed:", "\0end", format, false);
     }
 

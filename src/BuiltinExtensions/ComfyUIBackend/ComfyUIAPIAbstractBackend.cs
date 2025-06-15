@@ -253,6 +253,7 @@ public abstract class ComfyUIAPIAbstractBackend : AbstractT2IBackend
             JObject toSend = new()
             {
                 ["batch_index"] = batchId,
+                ["request_id"] = $"{user_input.UserRequestId}",
                 ["overall_percent"] = nodesDone / (float)expectedNodes,
                 ["current_percent"] = curPercent
             };
@@ -313,12 +314,14 @@ public abstract class ComfyUIAPIAbstractBackend : AbstractT2IBackend
                 if (interrupt.IsCancellationRequested && !hasInterrupted)
                 {
                     await doInterruptNow();
+                    return;
                 }
                 Task<byte[]> getData = socket.ReceiveData(100 * 1024 * 1024, Program.GlobalProgramCancel);
                 Task t = await Task.WhenAny(getData, interruptTask);
                 if (t == interruptTask)
                 {
                     await doInterruptNow();
+                    return;
                 }
                 byte[] output = await getData;
                 if (output is not null)
@@ -469,6 +472,7 @@ public abstract class ComfyUIAPIAbstractBackend : AbstractT2IBackend
                             takeOutput(new JObject()
                             {
                                 ["batch_index"] = index == 0 || !int.TryParse(batchId, out int batchInt) ? batchId : batchInt + index,
+                                ["request_id"] = $"{user_input.UserRequestId}",
                                 ["preview"] = $"data:{dataType};base64," + Convert.ToBase64String(output, 8, output.Length - 8),
                                 ["overall_percent"] = nodesDone / (float)expectedNodes,
                                 ["current_percent"] = curPercent
@@ -512,7 +516,10 @@ public abstract class ComfyUIAPIAbstractBackend : AbstractT2IBackend
         }
         finally
         {
-            ReusableSockets.Enqueue(new(id, socket));
+            if (!socket.CloseStatus.HasValue)
+            {
+                ReusableSockets.Enqueue(new(id, socket));
+            }
         }
     }
 

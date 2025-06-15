@@ -108,8 +108,20 @@ public class WorkflowGeneratorSteps
         }, -10);
         AddModelGenStep(g =>
         {
+            if (g.UserInput.TryGet(ComfyUIBackendExtension.SetClipDevice, out string device) && g.Features.Contains("set_clip_device"))
+            {
+                string clipDeviceNode = g.CreateNode("OverrideCLIPDevice", new JObject()
+                {
+                    ["clip"] = g.LoadingClip,
+                    ["device"] = device
+                });
+                g.LoadingClip = [clipDeviceNode, 0];
+            }
+        }, -9);
+        AddModelGenStep(g =>
+        {
             string applyTo = g.UserInput.Get(T2IParamTypes.FreeUApplyTo, null);
-            if (ComfyUIBackendExtension.FeaturesSupported.Contains("freeu") && applyTo is not null)
+            if (g.Features.Contains("freeu") && applyTo is not null)
             {
                 if (applyTo == "Both" || applyTo == g.LoadingModelType)
                 {
@@ -232,7 +244,8 @@ public class WorkflowGeneratorSteps
                             ["rel_l1_thresh"] = teaCacheThreshold,
                             ["max_skip_steps"] = 3,
                             ["start_percent"] = 0,
-                            ["end_percent"] = 1
+                            ["end_percent"] = 1,
+                            ["cache_device"] = "cuda"
                         });
                         g.LoadingModel = [teaCacheNode, 0];
                     }
@@ -282,7 +295,8 @@ public class WorkflowGeneratorSteps
                         ["rel_l1_thresh"] = teaCacheThreshold,
                         ["max_skip_steps"] = 3,
                         ["start_percent"] = 0,
-                        ["end_percent"] = 1
+                        ["end_percent"] = 1,
+                        ["cache_device"] = "cuda"
                     });
                     g.LoadingModel = [teaCacheNode, 0];
                 }
@@ -294,7 +308,7 @@ public class WorkflowGeneratorSteps
         }, -4);
         AddModelGenStep(g =>
         {
-            if (ComfyUIBackendExtension.FeaturesSupported.Contains("aitemplate") && g.UserInput.Get(ComfyUIBackendExtension.AITemplateParam))
+            if (g.Features.Contains("aitemplate") && g.UserInput.Get(ComfyUIBackendExtension.AITemplateParam))
             {
                 string aitLoad = g.CreateNode("AITemplateLoader", new JObject()
                 {
@@ -1398,7 +1412,7 @@ public class WorkflowGeneratorSteps
                         g.CreateImageSaveNode([imageNode, 0], g.GetStableDynamicID(50000, 0));
                     }
                     int oversize = g.UserInput.Get(T2IParamTypes.SegmentMaskOversize, 16);
-                    (string boundsNode, string croppedMask, string masked, string scaledImage) = g.CreateImageMaskCrop([segmentNode, 0], g.FinalImageOut, oversize, vae, g.FinalLoadedModel, thresholdMax: g.UserInput.Get(T2IParamTypes.SegmentThresholdMax, 1));
+                    g.MaskShrunkInfo = g.CreateImageMaskCrop([segmentNode, 0], g.FinalImageOut, oversize, vae, g.FinalLoadedModel, thresholdMax: g.UserInput.Get(T2IParamTypes.SegmentThresholdMax, 1));
                     g.EnableDifferential();
                     if (part.ContextID > 0)
                     {
@@ -1411,9 +1425,10 @@ public class WorkflowGeneratorSteps
                     int startStep = (int)Math.Round(steps * (1 - part.Strength2));
                     long seed = g.UserInput.Get(T2IParamTypes.Seed) + 2 + i;
                     double cfg = g.UserInput.Get(T2IParamTypes.RefinerCFGScale, g.UserInput.Get(T2IParamTypes.CFGScale));
-                    string sampler = g.CreateKSampler(model, prompt, negPrompt, [masked, 0], cfg, steps, startStep, 10000, seed, false, true);
+                    string sampler = g.CreateKSampler(model, prompt, negPrompt, [g.MaskShrunkInfo.MaskedLatent, 0], cfg, steps, startStep, 10000, seed, false, true);
                     string decoded = g.CreateVAEDecode(vae, [sampler, 0]);
-                    g.FinalImageOut = g.RecompositeCropped(boundsNode, [croppedMask, 0], g.FinalImageOut, [decoded, 0]);
+                    g.FinalImageOut = g.RecompositeCropped(g.MaskShrunkInfo.BoundsNode, [g.MaskShrunkInfo.CroppedMask, 0], g.FinalImageOut, [decoded, 0]);
+                    g.MaskShrunkInfo = new(null, null, null, null);
                 }
             }
         }, 5);
@@ -1603,7 +1618,25 @@ public class WorkflowGeneratorSteps
                     }
                     return (latent, startStep);
                 }
-                g.CreateImageToVideo(vidModel, ref frames, videoCfg, ref videoFps, width, height, prompt, negPrompt, steps, seed, altLatent, batchInd, batchLen);
+                WorkflowGenerator.ImageToVideoGenInfo genInfo = new()
+                {
+                    Generator = g,
+                    VideoModel = vidModel,
+                    Frames = frames,
+                    VideoCFG = videoCfg,
+                    VideoFPS = videoFps,
+                    Width = width,
+                    Height = height,
+                    Prompt = prompt,
+                    NegativePrompt = negPrompt,
+                    Steps = steps,
+                    Seed = seed,
+                    AltLatent = altLatent,
+                    BatchIndex = batchInd,
+                    BatchLen = batchLen
+                };
+                g.CreateImageToVideo(genInfo);
+                videoFps = genInfo.VideoFPS;
                 if (g.UserInput.TryGet(ComfyUIBackendExtension.VideoFrameInterpolationMethod, out string method) && g.UserInput.TryGet(ComfyUIBackendExtension.VideoFrameInterpolationMultiplier, out int mult) && mult > 1)
                 {
                     if (g.UserInput.Get(T2IParamTypes.OutputIntermediateImages, false))
@@ -1700,13 +1733,30 @@ public class WorkflowGeneratorSteps
                     });
                     JArray partialBatch = [partialBatchNode, 0];
                     g.FinalImageOut = partialBatch;
-                    g.CreateImageToVideo(extendModel, ref frames, cfg, ref videoFps, width, height, prompt, negPrompt, steps, seed, null, 0, frameExtendOverlap);
+                    WorkflowGenerator.ImageToVideoGenInfo genInfo = new()
+                    {
+                        Generator = g,
+                        VideoModel = extendModel,
+                        Frames = frames,
+                        VideoCFG = cfg,
+                        VideoFPS = videoFps,
+                        Width = width,
+                        Height = height,
+                        Prompt = prompt,
+                        NegativePrompt = negPrompt,
+                        Steps = steps,
+                        Seed = seed,
+                        BatchIndex = 0,
+                        BatchLen = frameExtendOverlap
+                    };
+                    g.CreateImageToVideo(genInfo);
+                    videoFps = genInfo.VideoFPS;
                     if (saveIntermediate)
                     {
                         g.CreateNode("SwarmSaveAnimationWS", new JObject()
                         {
                             ["images"] = g.FinalImageOut,
-                            ["fps"] = videoFps,
+                            ["fps"] = genInfo.VideoFPS,
                             ["lossless"] = false,
                             ["quality"] = 95,
                             ["method"] = "default",

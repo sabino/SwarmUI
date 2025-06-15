@@ -168,7 +168,7 @@ public class Session : IEquatable<Session>
         }
         string metadata = user_input.GenRawMetadata();
         Task<Image> resultImg = Task.FromResult(image);
-        if (!maySkipConversion || !user_input.Get(T2IParamTypes.DoNotSave, false))
+        if (!maySkipConversion || !user_input.Get(T2IParamTypes.DoNotSave, false) || user_input.SourceSession.User.Settings.FileFormat.ReformatTransientImages)
         {
             string format = user_input.Get(T2IParamTypes.ImageFormat, User.Settings.FileFormat.ImageFormat);
             resultImg = Task.Run(() =>
@@ -255,11 +255,7 @@ public class Session : IEquatable<Session>
                 {
                     Image actualImage = image.ActualImageTask is null ? image.Img : await image.ActualImageTask;
                     File.WriteAllBytes(fullPath, actualImage.ImageData);
-                    if (User.Settings.FileFormat.SaveTextFileMetadata && !string.IsNullOrWhiteSpace(metadata))
-                    {
-                        File.WriteAllBytes(fullPathNoExt + ".txt", metadata.EncodeUTF8());
-                    }
-                    if (!ImageMetadataTracker.ExtensionsWithMetadata.Contains(extension) && !string.IsNullOrWhiteSpace(metadata))
+                    if ((User.Settings.FileFormat.SaveTextFileMetadata || !ImageMetadataTracker.ExtensionsWithMetadata.Contains(extension)) && !string.IsNullOrWhiteSpace(metadata))
                     {
                         File.WriteAllBytes(fullPathNoExt + ".swarm.json", metadata.EncodeUTF8());
                     }

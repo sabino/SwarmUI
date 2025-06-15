@@ -6,6 +6,14 @@ let refreshParamsExtra = [];
 /** Set 'id': true to indicate that advanced status should be overridden for a group, ie it should be visible even when Display Advanced is unchecked. */
 let groupAdvancedOverrides = {};
 
+// TODO: Temporary (v0.9.6) legacy cookie cleanup
+for (let cookie of listCookies('group_toggle_auto-group-')) {
+    deleteCookie(cookie);
+}
+for (let cookie of listCookies('group_open_auto-group-')) {
+    deleteCookie(cookie);
+}
+
 function setGroupAdvancedOverride(groupId, enable) {
     if (groupAdvancedOverrides[groupId] && !enable) {
         delete groupAdvancedOverrides[groupId];
@@ -183,6 +191,7 @@ function doGroupOpenUpdate(group, parent, isOpen) {
     parent.classList.remove('input-group-closed');
     parent.classList.remove('input-group-open');
     let symbol = parent.querySelector('.auto-symbol');
+    let groupId = parent.id.substring('auto-group-'.length);
     if (isOpen || header.classList.contains('input-group-noshrink')) {
         group.style.display = 'flex';
         parent.classList.add('input-group-open');
@@ -190,7 +199,7 @@ function doGroupOpenUpdate(group, parent, isOpen) {
             symbol.innerHTML = '&#x2B9F;';
         }
         if (!group.dataset.do_not_save) {
-            setCookie(`group_open_${parent.id}`, 'open', getParamMemoryDays());
+            setCookie(`group_open_${groupId}`, 'open', getParamMemoryDays());
         }
     }
     else {
@@ -200,7 +209,7 @@ function doGroupOpenUpdate(group, parent, isOpen) {
             symbol.innerHTML = '&#x2B9E;';
         }
         if (!group.dataset.do_not_save) {
-            setCookie(`group_open_${parent.id}`, 'closed', getParamMemoryDays());
+            setCookie(`group_open_${groupId}`, 'closed', getParamMemoryDays());
         }
     }
     scheduleParamUnsupportUpdate();
@@ -219,8 +228,9 @@ function doToggleGroup(id) {
         header.classList.remove('input-group-header-activated');
         group.classList.remove('input-group-content-activated');
     }
+    let groupId = parent.id.substring('auto-group-'.length);
     if (!group.dataset.do_not_save) {
-        setCookie(`group_toggle_${parent.id}`, elem.checked ? 'yes' : 'no', getParamMemoryDays());
+        setCookie(`group_toggle_${groupId}`, elem.checked ? 'yes' : 'no', getParamMemoryDays());
     }
     doGroupOpenUpdate(group, parent, group.style.display != 'none');
 }
@@ -264,14 +274,14 @@ function autoRepersistParams() {
         }
         if (param.group && !groups.includes(param.group.id)) {
             groups.push(param.group.id);
-            let open = getCookie(`group_open_auto-group-${param.group.id}`);
+            let open = getCookie(`group_open_${param.group.id}`);
             if (open) {
-                setCookie(`group_open_auto-group-${param.group.id}`, open, days);
+                setCookie(`group_open_${param.group.id}`, open, days);
             }
             if (param.group.toggles) {
-                let toggle = getCookie(`group_toggle_auto-group-${param.group.id}`);
+                let toggle = getCookie(`group_toggle_${param.group.id}`);
                 if (toggle) {
-                    setCookie(`group_toggle_auto-group-${param.group.id}`, toggle, days);
+                    setCookie(`group_toggle_${param.group.id}`, toggle, days);
                 }
             }
         }
@@ -322,12 +332,12 @@ function genInputs(delay_final = false) {
                     html += `<div class="sui-popover sui-info-popover" id="popover_group_${groupId}"><b>${translateableHtml(escapeHtml(group.name))}</b>:<br>&emsp;${translateableHtml(safeHtmlOnly(group.description))}</div>`;
                     infoButton = `<span class="auto-input-qbutton info-popover-button" onclick="doPopover('group_${groupId}', arguments[0])">?</span>`;
                 }
-                let shouldOpen = getCookie(`group_open_auto-group-${groupId}`) || (group.open ? 'open' : 'closed');
+                let shouldOpen = getCookie(`group_open_${groupId}`) || (group.open ? 'open' : 'closed');
                 if (shouldOpen == 'closed') {
                     groupsClose.push(groupId);
                 }
                 if (group.toggles) {
-                    let shouldToggle = getCookie(`group_toggle_auto-group-${groupId}`) || 'no';
+                    let shouldToggle = getCookie(`group_toggle_${groupId}`) || 'no';
                     if (shouldToggle == 'yes') {
                         groupsEnable.push(groupId);
                     }
@@ -922,6 +932,12 @@ function refreshParameterValues(strong = true, callback = null) {
                 }
                 if ((param.type == "dropdown" || param.type == "model") && values) {
                     let val = elem.value;
+                    let triggerChange = false;
+                    if (elem.dataset.wantsValue && values.includes(elem.dataset.wantsValue)) {
+                        val = elem.dataset.wantsValue;
+                        triggerChange = true;
+                        delete elem.dataset.wantsValue;
+                    }
                     let html = '';
                     let alt_names = param['value_names'];
                     for (let i = 0; i < values.length; i++) {
@@ -934,6 +950,9 @@ function refreshParameterValues(strong = true, callback = null) {
                     elem.innerHTML = html;
                     elem.value = val;
                     presetElem.innerHTML = html;
+                    if (triggerChange) {
+                        triggerChangeFor(elem);
+                    }
                 }
                 else if (param.type == "list" && values) {
                     let listOpts = [...elem.options].map(o => o.value);
@@ -975,6 +994,7 @@ function setDirectParamValue(param, value, paramElem = null, forceDropdowns = fa
     else if (paramElem.tagName == "SELECT") {
         if (![...paramElem.querySelectorAll('option')].map(o => o.value).includes(value)) {
             if (!forceDropdowns) {
+                paramElem.dataset.wantsValue = value;
                 return;
             }
             paramElem.add(new Option(`${value} (Invalid)`, value, false, false));
@@ -1004,6 +1024,9 @@ function resetParamsToDefault(exclude = []) {
         deleteCookie(cookie);
     }
     for (let cookie of listCookies('group_toggle_')) {
+        deleteCookie(cookie);
+    }
+    for (let cookie of listCookies('group_open_')) {
         deleteCookie(cookie);
     }
     localStorage.removeItem('last_comfy_workflow_input');

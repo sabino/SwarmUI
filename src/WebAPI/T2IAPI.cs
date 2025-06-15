@@ -291,7 +291,20 @@ public static class T2IAPI
             {
                 noSave = true;
             }
-            (string url, string filePath) = noSave ? (session.GetImageB64(image.Img), null) : session.SaveImage(image, actualIndex, thisParams, metadata);
+            string url, filePath;
+            if (noSave)
+            {
+                Image img = image.Img;
+                if (session.User.Settings.FileFormat.ReformatTransientImages && image.ActualImageTask is not null)
+                {
+                    img = image.ActualImageTask.Result;
+                }
+                (url, filePath) = (session.GetImageB64(img), null);
+            }
+            else
+            {
+                (url, filePath) = session.SaveImage(image, actualIndex, thisParams, metadata);
+            }
             if (url == "ERROR")
             {
                 setError($"Server failed to save an image.");
@@ -314,7 +327,7 @@ public static class T2IAPI
                 imageSet.Add(image);
             }
             WebhookManager.SendEveryGenWebhook(thisParams, url, image.Img);
-            output(new JObject() { ["image"] = url, ["batch_index"] = $"{actualIndex}", ["metadata"] = string.IsNullOrWhiteSpace(metadata) ? null : metadata });
+            output(new JObject() { ["image"] = url, ["batch_index"] = $"{actualIndex}", ["request_id"] = $"{thisParams.UserRequestId}", ["metadata"] = string.IsNullOrWhiteSpace(metadata) ? null : metadata });
         }
         for (int i = 0; i < images && !claim.ShouldCancel; i++)
         {
@@ -375,7 +388,7 @@ public static class T2IAPI
         }
         long finalTime = Environment.TickCount64;
         T2IEngine.ImageOutput[] griddables = [.. imageSet.Where(i => i.IsReal)];
-        if (griddables.Length < session.User.Settings.MaxImagesInMiniGrid && griddables.Length > 1 && griddables.All(i => i.Img.Type == Image.ImageType.IMAGE))
+        if (griddables.Length <= session.User.Settings.MaxImagesInMiniGrid && griddables.Length > 1 && griddables.All(i => i.Img.Type == Image.ImageType.IMAGE))
         {
             ISImage[] imgs = [.. griddables.Select(i => i.Img.ToIS)];
             int columns = (int)Math.Ceiling(Math.Sqrt(imgs.Length));
@@ -458,7 +471,7 @@ public static class T2IAPI
         (Task<Image> imgTask, string metadata) = user_input.SourceSession.ApplyMetadata(img, user_input, 1);
         T2IEngine.ImageOutput outputImage = new() { Img = img, ActualImageTask = imgTask };
         (string path, _) = session.SaveImage(outputImage, 0, user_input, metadata);
-        return new() { ["images"] = new JArray() { new JObject() { ["image"] = path, ["batch_index"] = "0", ["metadata"] = metadata } } };
+        return new() { ["images"] = new JArray() { new JObject() { ["image"] = path, ["batch_index"] = "0", ["request_id"] = $"{user_input.UserRequestId}", ["metadata"] = metadata } } };
     }
 
     public static HashSet<string> ImageExtensions = ["png", "jpg", "html", "gif", "webm", "mp4", "webp", "mov"];
@@ -563,6 +576,19 @@ public static class T2IAPI
                 }
             });
             List<ImageHistoryHelper> files = [.. filesConc.Values.SelectMany(f => f).Take(limit)];
+            HashSet<string> included = [.. files.Select(f => f.Name)];
+            for (int i = 0; i < files.Count; i++)
+            {
+                if (!files[i].Name.StartsWith("Starred/"))
+                {
+                    string starPath = $"Starred/{(session.User.Settings.StarNoFolders ? files[i].Name.Replace("/", "") : files[i].Name)}";
+                    if (included.Contains(starPath))
+                    {
+                        files[i] = files[i] with { Name = null };
+                    }
+                }
+            }
+            files = [.. files.Where(f => f.Name is not null)];
             sortList(files);
             long timeEnd = Environment.TickCount64;
             Logs.Verbose($"Listed {files.Count} images in {(timeEnd - timeStart) / 1000.0:0.###} seconds.");
