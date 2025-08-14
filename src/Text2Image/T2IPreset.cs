@@ -8,6 +8,7 @@ namespace SwarmUI.Text2Image;
 public class T2IPreset
 {
     [BsonId]
+    [MongoDB.Bson.Serialization.Attributes.BsonId]
     public string ID { get; set; }
 
     /// <summary>The user who made this.</summary>

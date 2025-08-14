@@ -17,6 +17,7 @@ public class Session : IEquatable<Session>
     {
         /// <summary>The randomly generated session ID.</summary>
         [BsonId]
+        [MongoDB.Bson.Serialization.Attributes.BsonId]
         public string ID { get; set; }
 
         /// <summary>The relevant user's ID.</summary>

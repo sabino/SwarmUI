@@ -19,6 +19,7 @@ public class User
     public class DatabaseEntry
     {
         [BsonId]
+        [MongoDB.Bson.Serialization.Attributes.BsonId]
         public string ID { get; set; }
 
         /// <summary>What presets this user has saved, matched to the preset database.</summary>
@@ -94,7 +95,7 @@ public class User
             {
                 return;
             }
-            SessionHandlerSource.UserDatabase.Upsert(Data);
+            SessionHandlerSource.UpsertUser(Data);
         }
     }
 
@@ -103,7 +104,7 @@ public class User
     {
         lock (SessionHandlerSource.DBLock)
         {
-            return SessionHandlerSource.GenericData.FindById($"{UserID}///${dataname}///{name.ToLowerFast()}")?.Data;
+            return SessionHandlerSource.FindGenericData($"{UserID}///${dataname}///{name.ToLowerFast()}")?.Data;
         }
     }
 
@@ -121,7 +122,7 @@ public class User
             string id = $"{UserID}///${dataname}///";
             try
             {
-                return [.. SessionHandlerSource.GenericData.Find(b => b.ID.StartsWith(id))];
+                return SessionHandlerSource.FindGenericDataByPrefix(id);
             }
             catch (Exception ex)
             {
@@ -141,7 +142,7 @@ public class User
                 return;
             }
             SessionHandler.GenericDataStore dataStore = new() { ID = $"{UserID}///${dataname}///{name.ToLowerFast()}", Data = data };
-            SessionHandlerSource.GenericData.Upsert(dataStore.ID, dataStore);
+            SessionHandlerSource.UpsertGenericData(dataStore);
         }
     }
 
@@ -150,7 +151,7 @@ public class User
     {
         lock (SessionHandlerSource.DBLock)
         {
-            return SessionHandlerSource.GenericData.Delete($"{UserID}///${dataname}///{name.ToLowerFast()}");
+            return SessionHandlerSource.DeleteGenericData($"{UserID}///${dataname}///{name.ToLowerFast()}");
         }
     }
 
@@ -159,7 +160,7 @@ public class User
     {
         lock (SessionHandlerSource.DBLock)
         {
-            return SessionHandlerSource.T2IPresets.FindById($"{UserID}///{name.ToLowerFast()}");
+            return SessionHandlerSource.FindPreset($"{UserID}///{name.ToLowerFast()}");
         }
     }
 
@@ -170,10 +171,10 @@ public class User
         {
             try
             {
-                List<T2IPreset> presets = [.. Data.Presets.Select(p => SessionHandlerSource.T2IPresets.FindById(p))];
+                List<T2IPreset> presets = [.. Data.Presets.Select(p => SessionHandlerSource.FindPreset(p))];
                 if (presets.Any(p => p is null))
                 {
-                    List<string> bad = [.. Data.Presets.Where(p => SessionHandlerSource.T2IPresets.FindById(p) is null)];
+                    List<string> bad = [.. Data.Presets.Where(p => SessionHandlerSource.FindPreset(p) is null)];
                     Logs.Error($"User {UserID} has presets that don't exist (database error?): {string.Join(", ", bad)}");
                     presets.RemoveAll(p => p is null);
                     Data.Presets.RemoveAll(bad.Contains);
@@ -199,7 +200,7 @@ public class User
                 return;
             }
             preset.ID = $"{UserID}///{preset.Title.ToLowerFast()}";
-            SessionHandlerSource.T2IPresets.Upsert(preset.ID, preset);
+            SessionHandlerSource.UpsertPreset(preset);
             if (!Data.Presets.Contains(preset.ID))
             {
                 Data.Presets.Add(preset.ID);
@@ -216,7 +217,7 @@ public class User
             string id = $"{UserID}///{name.ToLowerFast()}";
             if (Data.Presets.Remove(id))
             {
-                SessionHandlerSource.T2IPresets.Delete(id);
+                SessionHandlerSource.DeletePreset(id);
                 Save();
                 return true;
             }
@@ -484,7 +485,7 @@ public class User
             }
             Data.LoginSessions.Add(id);
             Save();
-            SessionHandlerSource.LoginSessions.Upsert(id, session);
+            SessionHandlerSource.UpsertLoginSession(session);
         }
         string userIdHex = Utilities.BytesToHex(Encoding.UTF8.GetBytes(UserID));
         return (session, $"{userIdHex}.{id}.{validationText}");

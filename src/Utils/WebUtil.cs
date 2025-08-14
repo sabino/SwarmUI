@@ -274,7 +274,7 @@ public static class WebUtil
             {
                 return null;
             }
-            SessionHandler.LoginSession sess = Program.Sessions.LoginSessions.FindById(tokId);
+            SessionHandler.LoginSession sess = Program.Sessions.FindLoginSession(tokId);
             if (sess is null || sess.ID != tokId || sess.UserID != user.UserID)
             {
                 return null;
@@ -285,7 +285,7 @@ public static class WebUtil
                 return null;
             }
             sess.LastActiveUnixTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-            Program.Sessions.LoginSessions.Upsert(sess);
+            Program.Sessions.UpsertLoginSession(sess);
             return user;
         }
     }
