@@ -1,7 +1,9 @@
 ﻿using SwarmUI.Utils;
 using SwarmUI.Core;
+using System;
 using System.Collections.Concurrent;
 using LiteDB;
+using MongoDB.Driver;
 using SwarmUI.Text2Image;
 using FreneticUtilities.FreneticToolkit;
 using FreneticUtilities.FreneticExtensions;
@@ -34,23 +36,25 @@ public class SessionHandler
     /// <summary>ID to use for the local user when in single-user mode.</summary>
     public static string LocalUserID = "local";
 
-    /// <summary>Internal database.</summary>
+    /// <summary>Internal LiteDB database.</summary>
     public ILiteDatabase Database;
 
-    /// <summary>Internal database (users).</summary>
+    /// <summary>LiteDB collections.</summary>
     public ILiteCollection<User.DatabaseEntry> UserDatabase;
-
-    /// <summary>Internal database (sessions).</summary>
     public ILiteCollection<Session.DatabaseEntry> SessionDatabase;
-
-    /// <summary>Internal database (presets).</summary>
     public ILiteCollection<T2IPreset> T2IPresets;
-
-    /// <summary>Generic user data store.</summary>
     public ILiteCollection<GenericDataStore> GenericData;
-
-    /// <summary>Internal database (login sessions).</summary>
     public ILiteCollection<LoginSession> LoginSessions;
+
+    /// <summary>MongoDB usage flag and collections.</summary>
+    public bool UseMongo;
+    public MongoClient Mongo;
+    public IMongoDatabase MongoDatabase;
+    public IMongoCollection<User.DatabaseEntry> MongoUsers;
+    public IMongoCollection<Session.DatabaseEntry> MongoSessions;
+    public IMongoCollection<T2IPreset> MongoT2IPresets;
+    public IMongoCollection<GenericDataStore> MongoGenericData;
+    public IMongoCollection<LoginSession> MongoLoginSessions;
 
     /// <summary>Internal database access locker.</summary>
     public LockObject DBLock = new();
@@ -124,6 +128,7 @@ public class SessionHandler
     public class GenericDataStore
     {
         [BsonId]
+        [MongoDB.Bson.Serialization.Attributes.BsonId]
         public string ID { get; set; }
 
         public string Data { get; set; }
@@ -136,6 +141,7 @@ public class SessionHandler
     public class LoginSession
     {
         [BsonId]
+        [MongoDB.Bson.Serialization.Attributes.BsonId]
         public string ID { get; set; }
 
         public string UserID { get; set; }
@@ -160,12 +166,28 @@ public class SessionHandler
 
     public SessionHandler()
     {
-        Database = new LiteDatabase($"{Program.DataDir}/Users.ldb");
-        UserDatabase = Database.GetCollection<User.DatabaseEntry>("users");
-        SessionDatabase = Database.GetCollection<Session.DatabaseEntry>("sessions");
-        T2IPresets = Database.GetCollection<T2IPreset>("t2i_presets");
-        GenericData = Database.GetCollection<GenericDataStore>("generic_data");
-        LoginSessions = Database.GetCollection<LoginSession>("login_sessions");
+        UseMongo = string.Equals(Environment.GetEnvironmentVariable("SWARM_DB"), "mongodb", StringComparison.OrdinalIgnoreCase);
+        if (UseMongo)
+        {
+            string conn = Environment.GetEnvironmentVariable("SWARM_MONGO_CONNECTION") ?? "mongodb://localhost:27017";
+            string dbName = Environment.GetEnvironmentVariable("SWARM_MONGO_DB") ?? "swarmui";
+            Mongo = new MongoClient(conn);
+            MongoDatabase = Mongo.GetDatabase(dbName);
+            MongoUsers = MongoDatabase.GetCollection<User.DatabaseEntry>("users");
+            MongoSessions = MongoDatabase.GetCollection<Session.DatabaseEntry>("sessions");
+            MongoT2IPresets = MongoDatabase.GetCollection<T2IPreset>("t2i_presets");
+            MongoGenericData = MongoDatabase.GetCollection<GenericDataStore>("generic_data");
+            MongoLoginSessions = MongoDatabase.GetCollection<LoginSession>("login_sessions");
+        }
+        else
+        {
+            Database = new LiteDatabase($"{Program.DataDir}/Users.ldb");
+            UserDatabase = Database.GetCollection<User.DatabaseEntry>("users");
+            SessionDatabase = Database.GetCollection<Session.DatabaseEntry>("sessions");
+            T2IPresets = Database.GetCollection<T2IPreset>("t2i_presets");
+            GenericData = Database.GetCollection<GenericDataStore>("generic_data");
+            LoginSessions = Database.GetCollection<LoginSession>("login_sessions");
+        }
         FDSSection rolesData = new();
         try
         {
@@ -245,16 +267,82 @@ public class SessionHandler
         });
     }
 
+    public User.DatabaseEntry FindUserEntry(string id) => UseMongo ? MongoUsers.Find(u => u.ID == id).FirstOrDefault() : UserDatabase.FindById(id);
+
+    public void UpsertUser(User.DatabaseEntry user)
+    {
+        if (UseMongo) { MongoUsers.ReplaceOne(u => u.ID == user.ID, user, new ReplaceOptions { IsUpsert = true }); }
+        else { UserDatabase.Upsert(user); }
+    }
+
+    public bool DeleteUser(string id) => UseMongo ? MongoUsers.DeleteOne(u => u.ID == id).DeletedCount > 0 : UserDatabase.Delete(id);
+
+    public IEnumerable<Session.DatabaseEntry> GetAllSessions() => UseMongo ? MongoSessions.Find(_ => true).ToEnumerable() : SessionDatabase.FindAll();
+
+    public Session.DatabaseEntry FindSessionEntry(string id) => UseMongo ? MongoSessions.Find(s => s.ID == id).FirstOrDefault() : SessionDatabase.FindById(id);
+
+    public void UpsertSession(Session.DatabaseEntry sess)
+    {
+        if (UseMongo) { MongoSessions.ReplaceOne(s => s.ID == sess.ID, sess, new ReplaceOptions { IsUpsert = true }); }
+        else { SessionDatabase.Upsert(sess); }
+    }
+
+    public bool DeleteSession(string id) => UseMongo ? MongoSessions.DeleteOne(s => s.ID == id).DeletedCount > 0 : SessionDatabase.Delete(id);
+
+    public T2IPreset FindPreset(string id) => UseMongo ? MongoT2IPresets.Find(p => p.ID == id).FirstOrDefault() : T2IPresets.FindById(id);
+
+    public void UpsertPreset(T2IPreset preset)
+    {
+        if (UseMongo) { MongoT2IPresets.ReplaceOne(p => p.ID == preset.ID, preset, new ReplaceOptions { IsUpsert = true }); }
+        else { T2IPresets.Upsert(preset.ID, preset); }
+    }
+
+    public bool DeletePreset(string id) => UseMongo ? MongoT2IPresets.DeleteOne(p => p.ID == id).DeletedCount > 0 : T2IPresets.Delete(id);
+
+    public void DeletePresetsByPrefix(string prefix)
+    {
+        if (UseMongo) { MongoT2IPresets.DeleteMany(p => p.ID.StartsWith(prefix)); }
+        else { T2IPresets.DeleteMany(b => b.ID.StartsWith(prefix)); }
+    }
+
+    public GenericDataStore FindGenericData(string id) => UseMongo ? MongoGenericData.Find(g => g.ID == id).FirstOrDefault() : GenericData.FindById(id);
+
+    public List<GenericDataStore> FindGenericDataByPrefix(string prefix) => UseMongo ? MongoGenericData.Find(g => g.ID.StartsWith(prefix)).ToList() : [.. GenericData.Find(g => g.ID.StartsWith(prefix))];
+
+    public void UpsertGenericData(GenericDataStore data)
+    {
+        if (UseMongo) { MongoGenericData.ReplaceOne(g => g.ID == data.ID, data, new ReplaceOptions { IsUpsert = true }); }
+        else { GenericData.Upsert(data.ID, data); }
+    }
+
+    public bool DeleteGenericData(string id) => UseMongo ? MongoGenericData.DeleteOne(g => g.ID == id).DeletedCount > 0 : GenericData.Delete(id);
+
+    public void DeleteGenericDataByPrefix(string prefix)
+    {
+        if (UseMongo) { MongoGenericData.DeleteMany(g => g.ID.StartsWith(prefix)); }
+        else { GenericData.DeleteMany(b => b.ID.StartsWith(prefix)); }
+    }
+
+    public LoginSession FindLoginSession(string id) => UseMongo ? MongoLoginSessions.Find(l => l.ID == id).FirstOrDefault() : LoginSessions.FindById(id);
+
+    public void UpsertLoginSession(LoginSession session)
+    {
+        if (UseMongo) { MongoLoginSessions.ReplaceOne(l => l.ID == session.ID, session, new ReplaceOptions { IsUpsert = true }); }
+        else { LoginSessions.Upsert(session.ID, session); }
+    }
+
+    public bool DeleteLoginSession(string id) => UseMongo ? MongoLoginSessions.DeleteOne(l => l.ID == id).DeletedCount > 0 : LoginSessions.Delete(id);
+
     public void CleanOldSessions()
     {
         long cutOffTimeUTC = DateTimeOffset.UtcNow.Subtract(MaxSessionAge).ToUnixTimeSeconds();
         lock (DBLock)
         {
-            foreach (Session.DatabaseEntry sess in SessionDatabase.FindAll())
+            foreach (Session.DatabaseEntry sess in GetAllSessions())
             {
                 if (sess.LastActiveUnixTime < cutOffTimeUTC)
                 {
-                    SessionDatabase.Delete(sess.ID);
+                    DeleteSession(sess.ID);
                 }
             }
         }
@@ -286,7 +374,7 @@ public class SessionHandler
                 sess.User.CurrentSessions[sess.ID] = sess;
                 lock (DBLock)
                 {
-                    SessionDatabase.Upsert(sess.MakeDBEntry());
+                    UpsertSession(sess.MakeDBEntry());
                 }
                 return sess;
             }
@@ -306,7 +394,7 @@ public class SessionHandler
         session.User.CurrentSessions.TryRemove(session.ID, out _);
         lock (DBLock)
         {
-            SessionDatabase.Delete(session.ID);
+            DeleteSession(session.ID);
         }
     }
 
@@ -326,7 +414,7 @@ public class SessionHandler
         {
             if (!makeNew)
             {
-                User.DatabaseEntry userData = UserDatabase.FindById(userId);
+                User.DatabaseEntry userData = FindUserEntry(userId);
                 if (userData is null)
                 {
                     return null;
@@ -335,7 +423,7 @@ public class SessionHandler
             }
             return Users.GetOrAdd(userId, _ => // Intentional GetOrAdd due to special locking requirements (DBLock)
             {
-                User.DatabaseEntry userData = UserDatabase.FindById(userId);
+                User.DatabaseEntry userData = FindUserEntry(userId);
                 userData ??= new() { ID = userId, RawSettings = "\n" };
                 return new(this, userData);
             });
@@ -356,14 +444,14 @@ public class SessionHandler
             {
                 return true;
             }
-            Session.DatabaseEntry existing = SessionDatabase.FindById(id);
+            Session.DatabaseEntry existing = FindSessionEntry(id);
             if (existing is not null)
             {
                 if (!string.IsNullOrWhiteSpace(existing.OriginToken))
                 {
-                    if (LoginSessions.FindById(existing.OriginToken) is null)
+                    if (FindLoginSession(existing.OriginToken) is null)
                     {
-                        SessionDatabase.Delete(id);
+                        DeleteSession(id);
                         return false;
                     }
                 }
@@ -377,7 +465,7 @@ public class SessionHandler
                 if (Sessions.TryAdd(session.ID, session))
                 {
                     session.User.CurrentSessions[session.ID] = session;
-                    SessionDatabase.Upsert(session.MakeDBEntry());
+                    UpsertSession(session.MakeDBEntry());
                     return true;
                 }
             }
@@ -397,9 +485,9 @@ public class SessionHandler
             {
                 RemoveSession(userSess);
             }
-            T2IPresets.DeleteMany(b => b.ID.StartsWith(prefix));
-            GenericData.DeleteMany(b => b.ID.StartsWith(prefix));
-            UserDatabase.Delete(user.UserID);
+            DeletePresetsByPrefix(prefix);
+            DeleteGenericDataByPrefix(prefix);
+            DeleteUser(user.UserID);
             Users.TryRemove(user.UserID, out _);
         }
     }

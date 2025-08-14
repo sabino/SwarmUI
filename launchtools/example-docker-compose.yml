@@ -22,6 +22,12 @@ services:
       - ./src/BuiltinExtensions/ComfyUIBackend/CustomWorkflows:/SwarmUI/src/BuiltinExtensions/ComfyUIBackend/CustomWorkflows
     ports:
       - "7801:7801"
+    depends_on:
+      - mongo
+    environment:
+      SWARM_DB: mongodb
+      SWARM_MONGO_CONNECTION: mongodb://mongo:27017
+      SWARM_MONGO_DB: swarmui
     deploy:
       resources:
         reservations:
@@ -30,6 +36,11 @@ services:
               # change the count to the number of GPUs you want to use.
               count: 1
               capabilities: [gpu]
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongodata:/data/db
 volumes:
   swarmdata:
     name: swarmdata
@@ -39,3 +50,5 @@ volumes:
     name: swarmdlnodes
   swarmextensions:
     name: swarmextensions
+  mongodata:
+    name: mongodata

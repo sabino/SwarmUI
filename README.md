@@ -156,6 +156,10 @@ This project:
 - can be used to install some custom node packs, which have individual license notices for any non-pure-FOSS licenses before install.
 - supports user-built extensions which may have their own licenses or legal conditions.
 
+## Database options
+
+SwarmUI stores its data in [LiteDB](https://www.litedb.org/) by default. To use MongoDB instead, set the environment variable `SWARM_DB=mongodb`. Optional variables `SWARM_MONGO_CONNECTION` and `SWARM_MONGO_DB` let you configure the connection string and database name. The example Docker Compose file includes a MongoDB service configured with these variables.
+
 SwarmUI itself is under the MIT license, however some usages may be affected by the GPL variant licenses of connected projects list above, and note that any models used have their own licenses.
 
 ### Previous License

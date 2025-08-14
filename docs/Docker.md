@@ -115,6 +115,8 @@ If you're a "docker compose" fan, there is an included example docker compose fi
 - Run it via `HOST_UID="$(id -u)" HOST_GID="$(id -g)" docker compose up`
 - You should probably `docker compose rm` after
 
+The example compose file includes a MongoDB service. SwarmUI will automatically use it when the `SWARM_DB=mongodb` environment variable is set (as in the example).
+
 If you're not an active "docker compose" fan that needs it for some reason, I do not recommend it.
 
 # Advanced Usage, Notes, Troubleshooting
