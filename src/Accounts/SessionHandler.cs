@@ -2,6 +2,7 @@
 using SwarmUI.Core;
 using System.Collections.Concurrent;
 using LiteDB;
+using MDB = MongoDB.Bson.Serialization.Attributes;
 using SwarmUI.Text2Image;
 using FreneticUtilities.FreneticToolkit;
 using FreneticUtilities.FreneticExtensions;
@@ -35,22 +36,22 @@ public class SessionHandler
     public static string LocalUserID = "local";
 
     /// <summary>Internal database.</summary>
-    public ILiteDatabase Database;
+    public IDataDatabase Database;
 
     /// <summary>Internal database (users).</summary>
-    public ILiteCollection<User.DatabaseEntry> UserDatabase;
+    public IDataCollection<User.DatabaseEntry> UserDatabase;
 
     /// <summary>Internal database (sessions).</summary>
-    public ILiteCollection<Session.DatabaseEntry> SessionDatabase;
+    public IDataCollection<Session.DatabaseEntry> SessionDatabase;
 
     /// <summary>Internal database (presets).</summary>
-    public ILiteCollection<T2IPreset> T2IPresets;
+    public IDataCollection<T2IPreset> T2IPresets;
 
     /// <summary>Generic user data store.</summary>
-    public ILiteCollection<GenericDataStore> GenericData;
+    public IDataCollection<GenericDataStore> GenericData;
 
     /// <summary>Internal database (login sessions).</summary>
-    public ILiteCollection<LoginSession> LoginSessions;
+    public IDataCollection<LoginSession> LoginSessions;
 
     /// <summary>Internal database access locker.</summary>
     public LockObject DBLock = new();
@@ -123,7 +124,7 @@ public class SessionHandler
     /// <summary>Helper for the database to store generic datablobs.</summary>
     public class GenericDataStore
     {
-        [BsonId]
+        [BsonId, MDB.BsonId]
         public string ID { get; set; }
 
         public string Data { get; set; }
@@ -135,7 +136,7 @@ public class SessionHandler
     /// <summary>Helper for login session data.</summary>
     public class LoginSession
     {
-        [BsonId]
+        [BsonId, MDB.BsonId]
         public string ID { get; set; }
 
         public string UserID { get; set; }
@@ -160,7 +161,17 @@ public class SessionHandler
 
     public SessionHandler()
     {
-        Database = new LiteDatabase($"{Program.DataDir}/Users.ldb");
+        string dbType = Environment.GetEnvironmentVariable("SWARM_DB")?.ToLowerInvariant() ?? "litedb";
+        if (dbType == "mongodb")
+        {
+            string uri = Environment.GetEnvironmentVariable("SWARM_MONGO_URI") ?? "mongodb://localhost:27017";
+            string name = Environment.GetEnvironmentVariable("SWARM_MONGO_DB") ?? "swarmui";
+            Database = new MongoDbDatabase(uri, name);
+        }
+        else
+        {
+            Database = new LiteDbDatabase($"{Program.DataDir}/Users.ldb");
+        }
         UserDatabase = Database.GetCollection<User.DatabaseEntry>("users");
         SessionDatabase = Database.GetCollection<Session.DatabaseEntry>("sessions");
         T2IPresets = Database.GetCollection<T2IPreset>("t2i_presets");

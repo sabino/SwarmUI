@@ -1,4 +1,5 @@
-﻿using LiteDB;
+using LiteDB;
+using MDB = MongoDB.Bson.Serialization.Attributes;
 using Newtonsoft.Json.Linq;
 using SwarmUI.Utils;
 
@@ -7,7 +8,7 @@ namespace SwarmUI.Text2Image;
 /// <summary>User-saved Text2Image preset.</summary>
 public class T2IPreset
 {
-    [BsonId]
+    [BsonId, MDB.BsonId]
     public string ID { get; set; }
 
     /// <summary>The user who made this.</summary>

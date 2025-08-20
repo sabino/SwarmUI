@@ -1,6 +1,7 @@
 ﻿using FreneticUtilities.FreneticToolkit;
 using FreneticUtilities.FreneticDataSyntax;
 using LiteDB;
+using MDB = MongoDB.Bson.Serialization.Attributes;
 using SwarmUI.Core;
 using SwarmUI.DataHolders;
 using SwarmUI.Utils;
@@ -18,7 +19,7 @@ public class User
     /// <summary>Data for the user that goes directly to the database.</summary>
     public class DatabaseEntry
     {
-        [BsonId]
+        [BsonId, MDB.BsonId]
         public string ID { get; set; }
 
         /// <summary>What presets this user has saved, matched to the preset database.</summary>
