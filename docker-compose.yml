@@ -1,0 +1,19 @@
+version: '3.8'
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+  swarmui:
+    build: .
+    environment:
+      - SWARM_DB=mongodb
+      - SWARM_MONGO_URI=mongodb://mongo:27017
+      - SWARM_MONGO_DB=swarmui
+    depends_on:
+      - mongo
+    ports:
+      - "7801:7801"
+volumes:
+  mongo-data:

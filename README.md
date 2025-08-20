@@ -127,6 +127,10 @@ Note: if you're on Windows 10, you may need to manually install [git](https://gi
 
 See [Docs/Docker.md](/docs/Docker.md) for detailed instructions on using SwarmUI in Docker.
 
+## MongoDB support
+
+SwarmUI uses LiteDB by default. To switch to MongoDB, set the environment variable `SWARM_DB=mongodb` and provide a connection string via `SWARM_MONGO_URI` (and optional database name with `SWARM_MONGO_DB`). The included `docker-compose.yml` shows an example configuration that launches MongoDB alongside SwarmUI.
+
 # Documentation
 
 See [the documentation folder](/docs/README.md).

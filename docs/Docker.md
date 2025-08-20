@@ -109,9 +109,8 @@ Mac information is currently untested, but presumed to work fairly similar to Li
 
 # Docker-Compose
 
-If you're a "docker compose" fan, there is an included example docker compose file you can use as usual, which is equivalent to the "standard" option above.
+An example `docker-compose.yml` is provided in the repository. It starts SwarmUI and a MongoDB service and sets the necessary environment variables so SwarmUI uses MongoDB instead of the default LiteDB.
 
-- Copy the `launchtools/example-docker-compose.yml` to `docker-compose.yml` in the Swarm root, optionally edit the contents (eg add other drives)
 - Run it via `HOST_UID="$(id -u)" HOST_GID="$(id -g)" docker compose up`
 - You should probably `docker compose rm` after
 

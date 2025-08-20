@@ -1,6 +1,7 @@
 ﻿using FreneticUtilities.FreneticExtensions;
 using FreneticUtilities.FreneticToolkit;
 using LiteDB;
+using MDB = MongoDB.Bson.Serialization.Attributes;
 using SwarmUI.Core;
 using SwarmUI.Text2Image;
 using SwarmUI.Utils;
@@ -16,7 +17,7 @@ public class Session : IEquatable<Session>
     public class DatabaseEntry
     {
         /// <summary>The randomly generated session ID.</summary>
-        [BsonId]
+        [BsonId, MDB.BsonId]
         public string ID { get; set; }
 
         /// <summary>The relevant user's ID.</summary>
