@@ -30,6 +30,7 @@ Argument | Default | Description
 `--launch_mode` | `none` | Can be used to override the 'LaunchMode' server setting.
 `--require_control_within` | (None) | If specified, give a number of minutes within which a remote API server must send a `AdminTakeControl` API request, or presume the launch is bad. This is useful for auto-managed instances, such as via the AutoScalingBackend.
 `--no_persist` | `false` | If enabled, tells most systems in Swarm to avoid saving data (eg session handler will not save session data). Useful for instances with overlapping data storage especially. This may cause wasteful redundant data filling, running at least once without this set is recommended.
+`--model_scan_on_startup` | `Performance.ScanModelsOnStartup` | Overrides whether Swarm recursively enumerates model folders during startup. Set to `false` to start with an empty model list and enumerate models only after an explicit manual refresh.
 `--help` | `false` | Displays an in-CLI shortlist of CLI args and some usage hints, and stops early before running Swarm.
 
 # Environment Variables (EnvVars)

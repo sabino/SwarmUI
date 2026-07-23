@@ -101,6 +101,9 @@ public class Program
     /// <summary>If true, user has requested that the server avoid saving data. This is not a hard requirement.</summary>
     public static bool NoPersist = false;
 
+    /// <summary>If true, model folders are recursively enumerated during startup.</summary>
+    public static bool ScanModelsOnStartup = true;
+
     /// <summary>If true, user launched in dev build. If false, user launched in production mode.</summary>
     public static bool IsDevMode = false;
 
@@ -308,8 +311,15 @@ public class Program
         timer.Check("Prep Utils");
         LanguagesHelper.LoadAll();
         timer.Check("Languages load");
-        Logs.Init("Loading models list...");
-        RefreshAllModelSets();
+        if (ScanModelsOnStartup)
+        {
+            Logs.Init("Loading models list...");
+            RefreshAllModelSets();
+        }
+        else
+        {
+            Logs.Init("Skipping startup model scan. Models will be enumerated after an explicit manual refresh.");
+        }
         WildcardsHelper.Init();
         AutoCompleteListHelper.Init();
         UserSoundHelper.Init();
@@ -746,6 +756,7 @@ public class Program
             TimeLastRemoteControlPing = Environment.TickCount64;
         }
         NoPersist = GetCommandLineFlagAsBool("no_persist", false);
+        ScanModelsOnStartup = GetCommandLineFlagAsBool("model_scan_on_startup", ServerSettings.Performance.ScanModelsOnStartup);
     }
 
     /// <summary>Applies runtime-changable settings.</summary>
@@ -841,7 +852,8 @@ public class Program
               [--host <hostname>] [--port <port>] [--asp_loglevel <level>] [--loglevel <level>]
               [--user_id <username>] [--lock_settings <true/false>] [--ngrok-path <path>] [--cloudflared-path <path>]
               [--proxy-region <region>] [--proxy-added-args <args>] [--ngrok-basic-auth <auth-info>]
-              [--launch_mode <mode>] [--require_control_within <minutes>] [--no_persist <true/false>] [--help <true/false>]
+              [--launch_mode <mode>] [--require_control_within <minutes>] [--no_persist <true/false>]
+              [--model_scan_on_startup <true/false>] [--help <true/false>]
 
             Generally, CLI args are almost never used. When they are are, they usually fall into the following categories:
               - `settings_file`, `lock_settings`, `backends_file`, `loglevel` may be useful to advanced users will multiple instances.

@@ -190,6 +190,9 @@ public class Settings : AutoConfiguration
 
         [ConfigComment("How many models can be loaded in a model list at once.\nPast this count, the list will simply be cut off.\nUse sub-folder organization to prevent issues.")]
         public int ModelListSanityCap = 5000;
+
+        [ConfigComment("If true, all model folders are recursively enumerated while Swarm starts.\nIf false, Swarm starts with an empty model list and enumerates models only after an explicit manual refresh.\nThis can significantly reduce startup time and memory usage for browse-only instances or very large remote model stores.\nDefaults to true.")]
+        public bool ScanModelsOnStartup = true;
     }
 
     /// <summary>Settings related to backends.</summary>
